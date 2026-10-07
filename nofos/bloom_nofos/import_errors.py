@@ -166,26 +166,44 @@ IMPORT_ERROR_CATALOG = {
     "IMPORT-HEADING-TOO-LONG": {
         "title": "We found text that may have the wrong heading style",
         "summary": (
-            "The document contains heading text that is far longer than a "
-            "heading should be. This usually means a paragraph was formatted as "
-            "a heading by mistake. The affected text is shown above."
+            "Some heading text in this document is far longer than a heading "
+            "should be. This usually means a paragraph was formatted as a "
+            "heading by mistake. Every heading over the limit is listed below, "
+            "with where to find it in Word."
         ),
         "status": 422,
         "recovery_steps": (
-            "Open the document in Word and find the affected text shown above.",
-            "If it is paragraph text, change its style to ‘Normal’. If it is "
-            "genuinely a heading, shorten it or apply the correct heading style.",
-            "Save the document, then import it again.",
+            "In Word, open View, then Navigation Pane (on a Mac: View, then "
+            "Sidebar, then Navigation). Every heading is listed there, so one "
+            "that runs on for several lines stands out. Click it to jump to it. "
+            "You can also press Ctrl+F (Cmd+F on a Mac) and search for the "
+            "‘Search Word for’ text shown above.",
+            "If the text is a normal paragraph, change its style to ‘Normal’.",
+            "If a real heading and the paragraph after it run together, a line "
+            "break (Shift+Enter) is joining them. Turn on Show/Hide ¶ to see it "
+            "as ↵. Delete it, press Enter to start a new paragraph, and change "
+            "only the paragraph text to ‘Normal’.",
+            "If the text is inside a table or callout box, change the text in "
+            "that cell to ‘Normal’.",
+            "If it really is a heading, shorten it to fit the limit shown above.",
+            "Fix every heading listed above, save the document, then import it "
+            "again.",
         ),
         "when": (
-            "A section or subsection name exceeded the database field's "
-            "max_length, which in practice means paragraph text carrying a "
-            "heading style."
+            "One or more section or subsection names are longer than the "
+            "database field allows (250 characters for sections, 400 for "
+            "subsections). In practice that means paragraph text carrying a "
+            "heading style, often a heading and its first paragraph joined by "
+            "a manual line break."
         ),
         "support": (
-            "The error page names the heading, the limit, and the offending "
-            "text, so the user can find it in Word directly. This is the most "
-            "self-serviceable import error we have."
+            "The page lists every heading over the limit in one go, with the "
+            "section it sits under, its Word style, its length, and a short "
+            "phrase to search for in Word, and flags a likely Shift+Enter line "
+            "break. The warning log carries the same details under "
+            "`long_headings`, including the first 100 characters of each. If "
+            "the user still can't find it, have them turn on Show/Hide ¶ and "
+            "look for ↵ marks inside headings."
         ),
     },
     "IMPORT-NO-SECTIONS": {

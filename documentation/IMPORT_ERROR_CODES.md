@@ -143,19 +143,31 @@ later Heading 2. Other ambiguous patterns retain only the neutral steps above.
 
 **HTTP status:** 422
 
-**When it fires:** A section or subsection name exceeded the database field's max_length, which in practice means paragraph text carrying a heading style.
+**When it fires:** One or more section or subsection names are longer than the database field allows (250 characters for sections, 400 for subsections). In practice that means paragraph text carrying a heading style, often a heading and its first paragraph joined by a manual line break.
 
 **What the user sees**
 
 > **We found text that may have the wrong heading style**
 >
-> The document contains heading text that is far longer than a heading should be. This usually means a paragraph was formatted as a heading by mistake. The affected text is shown above.
+> Some heading text in this document is far longer than a heading should be. This usually means a paragraph was formatted as a heading by mistake. Every heading over the limit is listed below, with where to find it in Word.
 
-1. Open the document in Word and find the affected text shown above.
-2. If it is paragraph text, change its style to ‘Normal’. If it is genuinely a heading, shorten it or apply the correct heading style.
-3. Save the document, then import it again.
+Every heading over the limit is listed, not just the first. For each one the page shows:
 
-**What support should say:** The error page names the heading, the limit, and the offending text, so the user can find it in Word directly. This is the most self-serviceable import error we have.
+- **Where:** the section it sits under, or which main section it is
+- **Word style:** for example, Heading 3
+- **Length:** characters found and the limit
+- **Likely cause:** shown when a Shift+Enter line break joins the heading to the next paragraph
+- **Search Word for:** the first few words, short enough for Word's Find box (which takes at most 255 characters). When the heading has a line break, this comes from the first line, since the extracted text runs the lines together.
+- the full text, collapsed
+
+1. In Word, open View, then Navigation Pane (on a Mac: View, then Sidebar, then Navigation). Every heading is listed there, so one that runs on for several lines stands out. Click it to jump to it. You can also press Ctrl+F (Cmd+F on a Mac) and search for the ‘Search Word for’ text shown above.
+2. If the text is a normal paragraph, change its style to ‘Normal’.
+3. If a real heading and the paragraph after it run together, a line break (Shift+Enter) is joining them. Turn on Show/Hide ¶ to see it as ↵. Delete it, press Enter to start a new paragraph, and change only the paragraph text to ‘Normal’.
+4. If the text is inside a table or callout box, change the text in that cell to ‘Normal’.
+5. If it really is a heading, shorten it to fit the limit shown above.
+6. Fix every heading listed above, save the document, then import it again.
+
+**What support should say:** The page lists every heading over the limit in one go, with the section it sits under, its Word style, its length, and a short phrase to search for in Word, and flags a likely Shift+Enter line break. The warning log carries the same details under `long_headings`, including the first 100 characters of each. If the user still can't find it, have them turn on Show/Hide ¶ and look for ↵ marks inside headings.
 
 ### `IMPORT-NO-SECTIONS`
 

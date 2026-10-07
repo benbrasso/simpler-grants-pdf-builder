@@ -2,17 +2,19 @@ import os
 from unittest.mock import patch
 
 import markdown
+from bloom_nofos.error_helpers import LongHeading
 from bs4 import BeautifulSoup
 from constance.test import override_config
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.test import Client, SimpleTestCase, TestCase
 from django.urls import reverse
 from users.models import BloomUser
 
 from nofos.models import ImportAttempt, Nofo, Section, Subsection
 from nofos.nofo import (
+    find_long_headings,
     get_sections_from_soup,
     get_subsections_from_sections,
     merge_funding_details_label_value_paragraphs,
@@ -741,9 +743,9 @@ class TestBlockingImportErrorPages(TestCase):
         content = response.content.decode("utf-8")
         self.assertEqual(response.status_code, 422)
         self.assertIn("IMPORT-HEADING-TOO-LONG", content)
-        self.assertIn("Section heading 1", content)
-        self.assertIn("Heading character limit", content)
-        self.assertIn("251", content)
+        self.assertIn("Main section heading (section 1)", content)
+        self.assertIn("Heading 1", content)
+        self.assertIn("251 characters (the limit is 250)", content)
         self.assertIn(affected_text, content)
         self.assertNotIn("IMPORT-CREATE-INVALID", content)
 
@@ -766,8 +768,8 @@ class TestBlockingImportErrorPages(TestCase):
         content = response.content.decode("utf-8")
         self.assertEqual(response.status_code, 422)
         self.assertIn("IMPORT-HEADING-TOO-LONG", content)
-        self.assertIn("Subsection heading 1", content)
-        self.assertIn("400", content)
+        self.assertIn("Under the section “Valid section”", content)
+        self.assertIn("(the limit is 400)", content)
         self.assertIn("&lt;script&gt;", content)
         self.assertNotIn("<script>", content)
         self.assertNotIn("IMPORT-CREATE-INVALID", content)
@@ -788,14 +790,103 @@ class TestBlockingImportErrorPages(TestCase):
         content = response.content.decode("utf-8")
         self.assertEqual(response.status_code, 422)
         self.assertIn("IMPORT-HEADING-TOO-LONG", content)
-        self.assertIn("Subsection heading 1", content)
-        self.assertIn("448", content)
+        self.assertIn("Under the section “Step 1: Review the Opportunity”", content)
+        self.assertIn("Heading 2", content)
+        self.assertIn("448 characters (the limit is 400)", content)
+        self.assertIn(
+            "<code>This program supports community organizations working to</code>",
+            content,
+        )
         self.assertIn(
             "This entire paragraph was accidentally assigned a heading style in Word.",
             content,
         )
         self.assertNotIn("IMPORT-CREATE-INVALID", content)
         self.assertEqual(Nofo.objects.count(), 0)
+
+    def test_every_long_heading_is_listed_in_one_response(self):
+        long_section = "S" * 251
+        long_subsection_1 = "First " + ("x" * 400)
+        long_subsection_2 = "Second " + ("y" * 400)
+        uploaded_file = SimpleUploadedFile(
+            "several-long-headings.html",
+            (
+                "<p>Opportunity name: Test NOFO</p>"
+                "<p>Opdiv: CDC</p>"
+                "<h1>Step 1: Review the Opportunity</h1>"
+                f"<h2>{long_subsection_1}</h2><p>Body</p>"
+                "<h2>A fine heading</h2><p>Body</p>"
+                f"<h1>{long_section}</h1>"
+                f"<h3>{long_subsection_2}</h3><p>Body</p>"
+            ).encode("utf-8"),
+            content_type="text/html",
+        )
+
+        response = self.client.post(self.import_url, {"nofo-import": uploaded_file})
+
+        content = response.content.decode("utf-8")
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("IMPORT-HEADING-TOO-LONG", content)
+        self.assertIn("Heading 1 of 3", content)
+        self.assertIn("Heading 3 of 3", content)
+        self.assertIn(long_section, content)
+        self.assertIn(long_subsection_1, content)
+        self.assertIn(long_subsection_2, content)
+        self.assertIn("Under the section “Step 1: Review the Opportunity”", content)
+        self.assertIn("Main section heading (section 2)", content)
+        self.assertEqual(Nofo.objects.count(), 0)
+
+    def test_heading_joined_to_paragraph_by_line_break_is_flagged(self):
+        paragraph = "Applicants must be nonprofit organizations. " * 10
+        uploaded_file = SimpleUploadedFile(
+            "line-break-heading.html",
+            (
+                "<p>Opportunity name: Test NOFO</p>"
+                "<p>Opdiv: CDC</p>"
+                "<h1>Step 1: Review the Opportunity</h1>"
+                f"<h2>Eligibility<br />{paragraph}</h2>"
+                "<p>Body</p>"
+            ).encode("utf-8"),
+            content_type="text/html",
+        )
+
+        response = self.client.post(self.import_url, {"nofo-import": uploaded_file})
+
+        content = response.content.decode("utf-8")
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Likely cause", content)
+        self.assertIn("A line break (Shift+Enter) joins this heading", content)
+        # The extracted name runs the lines together ("EligibilityApplicants"),
+        # which Word's Find can't match, so the search text is the first line.
+        self.assertIn("<code>Eligibility</code>", content)
+
+    def test_long_heading_details_are_logged(self):
+        uploaded_file = SimpleUploadedFile(
+            "long-subsection.html",
+            (
+                "<p>Opportunity name: Test NOFO</p>"
+                "<p>Opdiv: CDC</p>"
+                "<h1>Valid section</h1>"
+                f"<h2>{'Z' * 401}</h2>"
+                "<p>Body</p>"
+            ).encode("utf-8"),
+            content_type="text/html",
+        )
+
+        with self.assertLogs("django.request", level="WARNING") as logs:
+            self.client.post(self.import_url, {"nofo-import": uploaded_file})
+
+        record = next(
+            r for r in logs.records if getattr(r, "long_headings", None) is not None
+        )
+        self.assertEqual(record.long_heading_count, 1)
+        logged = record.long_headings[0]
+        self.assertEqual(logged["kind"], "subsection")
+        self.assertEqual(logged["word_style"], "Heading 2")
+        self.assertEqual(logged["section_name"], "Valid section")
+        self.assertEqual(logged["length"], 401)
+        self.assertEqual(logged["max_length"], 400)
+        self.assertEqual(logged["text_preview"], "Z" * 100)
 
     def test_reimport_long_heading_preserves_current_nofo(self):
         affected_text = (
@@ -1312,3 +1403,64 @@ class TestSpecificImportErrorCodes(TestCase):
             ImportAttempt.objects.get().error_code,
             "IMPORT-VALIDATION-OTHER",
         )
+
+
+class TestLongHeading(SimpleTestCase):
+    def test_search_snippet_fits_word_find_and_ends_on_a_word(self):
+        heading = LongHeading(
+            kind="subsection",
+            order=1,
+            text="Applicants   must be\nnonprofit organizations " * 40,
+            max_length=400,
+        )
+
+        snippet = heading.search_snippet
+
+        self.assertLessEqual(len(snippet), 255)
+        self.assertTrue(snippet.startswith("Applicants must be nonprofit"))
+        self.assertIn(snippet.split()[-1], heading.text.split())
+
+    def test_search_snippet_uses_first_line_when_heading_has_a_line_break(self):
+        heading = LongHeading(
+            kind="subsection",
+            order=1,
+            text="EligibilityApplicants must be nonprofit organizations.",
+            max_length=400,
+            first_line="Eligibility",
+        )
+
+        self.assertTrue(heading.has_line_break)
+        self.assertEqual(heading.search_snippet, "Eligibility")
+
+    def test_word_style_comes_from_the_source_tag(self):
+        def style(tag):
+            return LongHeading(
+                kind="subsection", order=1, text="x", max_length=1, source_tag=tag
+            ).word_style
+
+        self.assertEqual(style("h1"), "Heading 1")
+        self.assertEqual(style("h3"), "Heading 3")
+        self.assertEqual(style("div"), "Heading 7")
+        self.assertEqual(style(""), "")
+
+    def test_find_long_headings_reports_all_of_them(self):
+        sections = [
+            {
+                "name": "S" * 251,
+                "order": 1,
+                "heading_tag": "h1",
+                "subsections": [
+                    {"name": "fine", "order": 1},
+                    {"name": "x" * 401, "order": 2, "heading_tag": "h2"},
+                ],
+            },
+            {"name": "Fine section", "order": 2, "subsections": []},
+        ]
+
+        long_headings = find_long_headings(sections, Section, Subsection)
+
+        self.assertEqual(
+            [(h.kind, h.order, h.word_style) for h in long_headings],
+            [("section", 1, "Heading 1"), ("subsection", 2, "Heading 2")],
+        )
+        self.assertEqual(long_headings[1].section_name, "S" * 251)

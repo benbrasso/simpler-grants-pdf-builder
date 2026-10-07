@@ -30,6 +30,9 @@ def log_exception(request, e, level="error", context=None, status=None):
         level: "error" or "warning"
         context: Optional string to describe what failed
         status: Optional HTTP status code (e.g. 400)
+
+    An exception with a `log_details()` method (e.g. MistaggedHeadingError)
+    adds its structured fields to the log entry.
     """
     log_data = {
         "exception_type": e.__class__.__name__,
@@ -38,6 +41,10 @@ def log_exception(request, e, level="error", context=None, status=None):
         "method": request.method,
         "url": request.get_full_path(),
     }
+
+    log_details = getattr(e, "log_details", None)
+    if callable(log_details):
+        log_data.update(log_details())
 
     if status:
         log_data["status"] = status

@@ -17,6 +17,24 @@
 		</dl>
 	{% endif %}
 
+	{% for group in error_detail_groups %}
+		<h2 class="font-heading-md margin-top-3 margin-bottom-1">{{ group.title }}</h2>
+		<dl>
+			{% for detail in group.details %}
+				<dt class="text-bold">{{ detail.label }}</dt>
+				<dd class="margin-left-0 margin-bottom-2">
+					{% if detail.is_code %}<code>{{ detail.value }}</code>{% else %}{{ detail.value }}{% endif %}
+				</dd>
+			{% endfor %}
+		</dl>
+		{% if group.full_text %}
+			<details class="margin-bottom-3">
+				<summary>Show the full text</summary>
+				<p>{{ group.full_text }}</p>
+			</details>
+		{% endif %}
+	{% endfor %}
+
 	{% if recovery_steps %}
 		<p>What to do next:</p>
 		<ol class="usa-list">

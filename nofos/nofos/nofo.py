@@ -24,6 +24,7 @@ import markdown
 import requests
 from bloom_nofos.error_helpers import (
     AmbiguousHeadingHierarchyError,
+    LongHeading,
     MistaggedHeadingError,
     StrictFormattingError,
 )
@@ -456,6 +457,50 @@ def add_page_breaks_to_headings(document):
                         subsection.save()
 
 
+def find_long_headings(sections, SectionModel, SubsectionModel):
+    """
+    Return a LongHeading for every section or subsection name over its
+    model's character limit.
+
+    Checked up front, before anything is saved, so one failed import can list
+    every long heading instead of stopping at the first.
+    """
+    section_limit = SectionModel._meta.get_field("name").max_length
+    subsection_limit = SubsectionModel._meta.get_field("name").max_length
+
+    long_headings = []
+    for section in sections:
+        section_name = section.get("name", "Section X")
+        if len(section_name) > section_limit:
+            long_headings.append(
+                LongHeading(
+                    kind="section",
+                    order=section.get("order", ""),
+                    text=section_name,
+                    max_length=section_limit,
+                    source_tag=section.get("heading_tag", ""),
+                    first_line=section.get("heading_first_line", ""),
+                )
+            )
+
+        for subsection in section.get("subsections", []):
+            subsection_name = subsection.get("name", "")
+            if len(subsection_name) > subsection_limit:
+                long_headings.append(
+                    LongHeading(
+                        kind="subsection",
+                        order=subsection.get("order", ""),
+                        text=subsection_name,
+                        max_length=subsection_limit,
+                        source_tag=subsection.get("heading_tag", ""),
+                        first_line=subsection.get("heading_first_line", ""),
+                        section_name=section_name,
+                    )
+                )
+
+    return long_headings
+
+
 def _build_document(document, sections, SectionModel, SubsectionModel):
     def _get_document_field_name(SectionModel, document):
         """
@@ -471,11 +516,19 @@ def _build_document(document, sections, SectionModel, SubsectionModel):
     def _raise_document_validation_error(validation_error, obj, heading_kind):
         name_errors = validation_error.error_dict.get("name", [])
         if any(error.code == "max_length" for error in name_errors):
+            # find_long_headings() normally catches these first; this is the
+            # backstop for a name that only fails once it reaches the model.
+            section = getattr(obj, "section", None)
             raise MistaggedHeadingError(
-                heading_kind=heading_kind,
-                heading_order=obj.order,
-                heading_text=obj.name,
-                max_length=obj._meta.get_field("name").max_length,
+                [
+                    LongHeading(
+                        kind=heading_kind,
+                        order=obj.order,
+                        text=obj.name,
+                        max_length=obj._meta.get_field("name").max_length,
+                        section_name=getattr(section, "name", "") or "",
+                    )
+                ]
             ) from validation_error
 
         # Surface the field and rule that failed as plain sentences. str() on a
@@ -488,6 +541,10 @@ def _build_document(document, sections, SectionModel, SubsectionModel):
                 readable.extend(f"{label}: {message}" for message in error.messages)
 
         raise ValidationError(readable or [str(validation_error)]) from validation_error
+
+    long_headings = find_long_headings(sections, SectionModel, SubsectionModel)
+    if long_headings:
+        raise MistaggedHeadingError(long_headings)
 
     sections_to_create = []
     subsections_to_create = []
@@ -831,6 +888,39 @@ def convert_table_with_all_ths_to_a_regular_table(table):
             new_tbody.append(row.extract())
 
 
+def get_text_before_first_line_break(tag):
+    """
+    Return the text before the first <br> in `tag`, or "" if it has none.
+    """
+    line_break = tag.find("br")
+    if not line_break:
+        return ""
+
+    before = []
+    for element in line_break.previous_elements:
+        if element is tag:
+            break
+        if isinstance(element, NavigableString):
+            before.append(str(element))
+    return clean_string("".join(reversed(before)))
+
+
+def get_heading_source(tag):
+    """
+    Record where a heading came from, for error messages if its text turns out
+    to be too long: the tag (so we can name the Word style), and the text
+    before its first line break, if it has one.
+
+    A Shift+Enter line break inside a Word heading pulls the next paragraph
+    into the heading, and the extracted name runs the two together with no
+    space, so the full name can't be searched for in Word. The first line can.
+    clean_heading_tags() flattens headings to text, so it saves the first
+    line as `data-first-line` before the <br> is lost.
+    """
+    first_line = tag.get("data-first-line") or get_text_before_first_line_break(tag)
+    return {"heading_tag": tag.name, "heading_first_line": first_line}
+
+
 def get_sections_from_soup(soup, top_heading_level="h1"):
     # build a structure that looks like our model
     sections = []
@@ -864,6 +954,7 @@ def get_sections_from_soup(soup, top_heading_level="h1"):
                         "html_id": tag.get("id", ""),
                         "has_section_page": has_section_page,
                         "body": [],
+                        **get_heading_source(tag),
                     }
                 )
             else:
@@ -980,6 +1071,7 @@ def get_subsections_from_sections(sections, top_heading_level="h1"):
                 "html_id": heading_tag.get("id", ""),
                 "is_callout_box": is_callout_box,
                 "body": body or [],
+                **get_heading_source(heading_tag),
             }
 
         return {
@@ -2950,6 +3042,8 @@ def clean_heading_tags(soup):
     - Collapse multiple spaces into one
     - Trim leading and trailing spaces
     - Decomposes headings that are empty after cleanup
+    - Saves the text before a line break as `data-first-line`, since
+      flattening the heading to text loses the <br> (see get_heading_source)
     """
     # Find all headings (h1, h2, ..., h6)
     headings = soup.find_all(re.compile(r"^h[1-6]$"))
@@ -2958,6 +3052,8 @@ def clean_heading_tags(soup):
         # Unwrap spans
         for span in heading.find_all("span"):
             span.unwrap()
+
+        first_line = get_text_before_first_line_break(heading)
 
         # Get the text content of the heading
         text = heading.get_text()
@@ -2970,6 +3066,8 @@ def clean_heading_tags(soup):
 
         # Replace the original heading text with the cleaned text
         heading.string = text
+        if first_line:
+            heading["data-first-line"] = first_line
 
         # If heading is empty after cleanup, remove it
         if not text:

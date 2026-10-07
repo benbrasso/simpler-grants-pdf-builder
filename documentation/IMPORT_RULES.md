@@ -197,7 +197,7 @@ Mammoth converts the uploaded `.docx` to HTML using a style-name map (`style_map
 ### IMPORT-013 — Heading tag cleanup
 - **Type:** repair *(the empty-heading case is a removal)*
 - **Trigger:** Any heading (`h1`-`h6`) containing `<span>` wrappers, extra internal whitespace, or leading/trailing whitespace; or a heading that becomes empty after this cleanup.
-- **Action:** Unwrap spans, collapse whitespace to single spaces, trim; decompose (remove) the heading entirely if empty.
+- **Action:** Unwrap spans, collapse whitespace to single spaces, trim; decompose (remove) the heading entirely if empty. If the heading contains a line break (`<br>`, from Shift+Enter in Word), the text before it is kept as a `data-first-line` attribute. The imported heading text doesn't change; the attribute is only used to give a searchable phrase on the `IMPORT-HEADING-TOO-LONG` error page.
 - **Source:** `nofo.py::clean_heading_tags`
 - **Status:** active
 

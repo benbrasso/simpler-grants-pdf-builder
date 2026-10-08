@@ -9,6 +9,8 @@ from ninja.security import HttpBearer
 
 logger = logging.getLogger(__name__)
 
+from bloom_nofos.version import get_version
+
 from nofos.models import Nofo, Section, Subsection
 from nofos.nofo import _build_document
 
@@ -29,8 +31,16 @@ health_api = NinjaAPI(auth=None, urls_namespace=None)
 
 @health_api.api_operation(["GET", "HEAD"], "/health", auth=None)
 def health_check(request):
-    """Health check endpoint that returns 200 OK."""
-    return {"status": "ok"}
+    """Health check endpoint that returns 200 OK.
+
+    Also reports the running version and commit so a post-deploy smoke test
+    can confirm the new release is the one serving traffic.
+    """
+    return {
+        "status": "ok",
+        "version": get_version(),
+        "sha": settings.GITHUB_SHA or None,
+    }
 
 
 # Main API instance for other endpoints

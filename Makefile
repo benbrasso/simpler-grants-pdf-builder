@@ -32,11 +32,15 @@ help:
 	@echo "  make showmigrations  Check DB connection and show migrations"
 	@echo "  make sqlflush_db     Generate SQL command to flush all data from the database"
 
-# Default build arg value
+# Default build arg values
 IS_PROD_ARG ?= 0
+# Baked into the image so /health can report which commit is running.
+# Deliberately not $(GITHUB_SHA): in the deploy workflow that is the
+# simpler-grants-gov commit, not this repo's.
+GITHUB_SHA_ARG ?= $(shell git rev-parse HEAD 2>/dev/null)
 
 build:
-	docker build --build-arg IS_PROD_ARG=$(IS_PROD_ARG) -t $(IMAGE_NAME):latest .
+	docker build --build-arg IS_PROD_ARG=$(IS_PROD_ARG) --build-arg GITHUB_SHA_ARG=$(GITHUB_SHA_ARG) -t $(IMAGE_NAME):latest .
 	docker image tag $(IMAGE_NAME):latest $(IMAGE_NAME):$(IMAGE_TAG)
 	@echo "Built image: $(IMAGE_NAME):$(IMAGE_TAG) with IS_PROD_ARG=$(IS_PROD_ARG)"
 

@@ -1,6 +1,7 @@
 import json
 import os
 
+from bloom_nofos.version import get_version
 from django.conf import settings
 from django.test import SimpleTestCase, TestCase, override_settings
 
@@ -10,11 +11,22 @@ from .utils import strip_null_and_blank_nofo_keys
 
 
 class HealthCheckAPITest(TestCase):
+    @override_settings(GITHUB_SHA="abc123")
     def test_health_check_get(self):
         """Test that a GET request for health check endpoint returns 200 OK with correct response"""
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "ok"})
+        self.assertEqual(
+            response.json(),
+            {"status": "ok", "version": get_version(), "sha": "abc123"},
+        )
+
+    @override_settings(GITHUB_SHA="")
+    def test_health_check_without_sha(self):
+        """An image built without GITHUB_SHA_ARG reports sha as null"""
+        response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["sha"])
 
     def test_health_check_head(self):
         """Test that a HEAD request for health check endpoint returns 200 OK"""

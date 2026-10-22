@@ -260,6 +260,19 @@ Edit “{{ nofo|nofo_name }}”
           </span>
         </button>
       {% endif %}
+      {% if has_endnote_errors %}
+        <button id="tab-4"
+                type="button"
+                role="tab"
+                class="secondary-darker"
+                aria-selected="false"
+                aria-controls="tabpanel-4"
+                tabindex="-1">
+          <span class="focus">
+            Check endnotes ({{ endnote_errors|length }})
+          </span>
+        </button>
+      {% endif %}
       {% if has_missing_metadata %}
         <button id="tab-3"
                 type="button"
@@ -322,6 +335,34 @@ Edit “{{ nofo|nofo_name }}”
                   <ol class="usa-list usa-list--no-max-width">
                     {% for heading_error in heading_errors %}
                     <li><a href="#{{ heading_error.subsection.html_id }}">{{ heading_error.subsection|subsection_name_or_order }} ({{ heading_error.subsection.tag }})</a>: {{ heading_error.error }}</li>
+                    {% endfor %}
+                  </ol>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if has_endnote_errors %}
+      <div id="tabpanel-4" role="tabpanel" class="secondary-darker is-hidden" tabindex="0" aria-labelledby="tab-4">
+        <div class="usa-alert">
+          <div class="usa-alert__body">
+            <h3 class="usa-alert__heading">Warning: some endnotes are not formatted correctly</h3>
+            <div>
+              <details>
+                <summary>
+                  {% if endnote_errors|length == 1 %}
+                  <span>There is 1 endnote error</span>
+                  {% else %}
+                  <span>There are {{ endnote_errors|length }} endnote errors</span>
+                  {% endif %}
+                </summary>
+                <div>
+                  <ol class="usa-list usa-list--no-max-width">
+                    {% for endnote_error in endnote_errors %}
+                    <li><a href="#{{ endnote_error.subsection.html_id }}">{{ endnote_error.subsection|subsection_name_or_order }}</a>: {{ endnote_error.error }}</li>
                     {% endfor %}
                   </ol>
                 </div>

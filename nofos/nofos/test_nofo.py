@@ -41,6 +41,7 @@ from .nofo import (
     decompose_instructions_tables,
     find_broken_links,
     find_external_links,
+    find_endnote_errors,
     find_incorrectly_nested_heading_levels,
     find_matches_with_context,
     find_same_or_higher_heading_levels_consecutive,
@@ -5161,6 +5162,149 @@ class TestReplaceSrcForInlineImages(TestCase):
             soup.find("img")["src"],
             "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2Q==",
         )
+
+
+class TestFindEndnoteErrors(TestCase):
+    def _create_nofo(self, sections):
+        return create_nofo("Test Nofo", sections, opdiv="Test OpDiv")
+
+    def _section(self, name, subsections):
+        return {
+            "name": name,
+            "order": 1,
+            "html_id": "",
+            "has_section_page": False,
+            "subsections": subsections,
+        }
+
+    def test_docx_endnotes_have_no_errors(self):
+        nofo = self._create_nofo(
+            [
+                self._section(
+                    "Endnotes",
+                    [
+                        {
+                            "name": "",
+                            "html_id": "",
+                            "order": 1,
+                            "tag": "",
+                            "body": [
+                                '<ol><li id="endnote-2"><p>An endnote. <a href="#endnote-ref-2">↑</a></p></li></ol>'
+                            ],
+                        }
+                    ],
+                )
+            ]
+        )
+        self.assertEqual(find_endnote_errors(nofo), [])
+
+    def test_google_docs_endnotes_have_no_errors(self):
+        nofo = self._create_nofo(
+            [
+                self._section(
+                    "Endnotes",
+                    [
+                        {
+                            "name": "",
+                            "html_id": "",
+                            "order": 1,
+                            "tag": "",
+                            "body": [
+                                '<p><a href="#ftnt_ref1" id="ftnt1">[1]</a> An endnote.</p>'
+                            ],
+                        }
+                    ],
+                )
+            ]
+        )
+        self.assertEqual(find_endnote_errors(nofo), [])
+
+    def test_plain_paragraphs_in_endnotes_section(self):
+        nofo = self._create_nofo(
+            [
+                self._section(
+                    "Endnotes",
+                    [
+                        {
+                            "name": "",
+                            "html_id": "",
+                            "order": 1,
+                            "tag": "",
+                            "body": [
+                                "<p>Program income is money earned.</p>",
+                                '<p>2<a href="https://example.com/legislation.pdf">legislation.pdf</a></p>',
+                            ],
+                        }
+                    ],
+                )
+            ]
+        )
+        subsection = nofo.sections.first().subsections.first()
+        self.assertEqual(
+            find_endnote_errors(nofo),
+            [
+                {
+                    "subsection": subsection,
+                    "name": "",
+                    "error": "2 blocks are not formatted as endnotes and won’t link to the NOFO text, starting with “Program income is money earned.”",
+                }
+            ],
+        )
+
+    def test_endnotes_subsection_in_appendices(self):
+        nofo = self._create_nofo(
+            [
+                self._section(
+                    "Appendices",
+                    [
+                        {
+                            "name": "Appendix A",
+                            "html_id": "",
+                            "order": 1,
+                            "tag": "h3",
+                            "body": ["<p>Not an endnote, but not under Endnotes</p>"],
+                        },
+                        {
+                            "name": "Endnotes",
+                            "html_id": "",
+                            "order": 2,
+                            "tag": "h3",
+                            "body": ["<ul><li>A bulleted endnote</li></ul>"],
+                        },
+                    ],
+                )
+            ]
+        )
+        subsection = nofo.sections.first().subsections.get(name="Endnotes")
+        self.assertEqual(
+            find_endnote_errors(nofo),
+            [
+                {
+                    "subsection": subsection,
+                    "name": "Endnotes",
+                    "error": "1 block is not formatted as endnotes and won’t link to the NOFO text, starting with “A bulleted endnote”",
+                }
+            ],
+        )
+
+    def test_no_endnotes(self):
+        nofo = self._create_nofo(
+            [
+                self._section(
+                    "Section 1",
+                    [
+                        {
+                            "name": "Subsection 1",
+                            "html_id": "",
+                            "order": 1,
+                            "tag": "h3",
+                            "body": ["<p>Hello</p>"],
+                        }
+                    ],
+                )
+            ]
+        )
+        self.assertEqual(find_endnote_errors(nofo), [])
 
 
 class TestAddEndnotesHeaderIfExists(TestCase):

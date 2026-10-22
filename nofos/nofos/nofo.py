@@ -1306,6 +1306,87 @@ def find_incorrectly_nested_heading_levels(nofo):
     return incorrectly_nested_heading_levels
 
 
+def find_endnote_errors(nofo):
+    """
+    This function will identify any content under an "Endnotes" heading that is not formatted as an endnote.
+
+    Endnotes are expected to be either:
+    - an <ol> where every <li> has an id starting with "endnote" or "footnote" (docx imports)
+    - a <p> that starts with a link back to "#ftnt_ref" (Google Docs imports)
+
+    Anything else (plain paragraphs, bullet lists, etc) won't link to or from the body of the NOFO.
+    """
+
+    def _is_endnote_block(tag):
+        if tag.name == "ol":
+            items = tag.find_all("li", recursive=False)
+            return bool(items) and all(
+                li.get("id", "").startswith(("endnote", "footnote")) for li in items
+            )
+
+        if tag.name == "p":
+            first_link = tag.find("a")
+            return bool(first_link) and first_link.get("href", "").startswith(
+                "#ftnt_ref"
+            )
+
+        return False
+
+    def _get_endnote_subsections(section):
+        subsections = section.subsections.all().order_by("order")
+        if "endnotes" in section.name.lower():
+            return list(subsections)
+
+        # Endnotes can also be a subsection (eg, in "Appendices"), followed by untitled subsections
+        endnote_subsections = []
+        in_endnotes = False
+        for subsection in subsections:
+            if subsection.name:
+                in_endnotes = subsection.name.strip().lower() == "endnotes"
+            if in_endnotes:
+                endnote_subsections.append(subsection)
+
+        return endnote_subsections
+
+    endnote_errors = []
+    for section in nofo.sections.all().order_by("order"):
+        for subsection in _get_endnote_subsections(section):
+            if not subsection.body.strip():
+                continue
+
+            soup = BeautifulSoup(
+                markdown.markdown(subsection.body, extensions=["extra"]), "html.parser"
+            )
+            unformatted_blocks = [
+                tag
+                for tag in soup.find_all(recursive=False)
+                if tag.get_text(strip=True) and not _is_endnote_block(tag)
+            ]
+
+            if unformatted_blocks:
+                first_text = unformatted_blocks[0].get_text(" ", strip=True)
+                if len(first_text) > 60:
+                    first_text = first_text[:60].rstrip() + "…"
+
+                endnote_errors.append(
+                    {
+                        "subsection": subsection,
+                        "name": subsection.name,
+                        "error": "{} {} not formatted as endnotes and won’t link to the NOFO text, starting with “{}”".format(
+                            len(unformatted_blocks),
+                            (
+                                "block is"
+                                if len(unformatted_blocks) == 1
+                                else "blocks are"
+                            ),
+                            first_text,
+                        ),
+                    }
+                )
+
+    return endnote_errors
+
+
 def _update_link_statuses(all_links):
     logging.basicConfig(
         level=logging.WARNING

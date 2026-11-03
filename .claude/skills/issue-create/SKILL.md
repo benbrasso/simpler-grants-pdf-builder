@@ -66,9 +66,26 @@ repository, say so and leave it out.
 ## 6. Get approval, then post or hand over
 
 Show the user the title, body and labels, and revise until they approve it.
-Creating an issue is a separate action from drafting one: post only when the
-user explicitly asks you to and GitHub access is available. Otherwise give them
-the title and body in copyable blocks, with the labels to apply.
+Creating an issue is a separate action from drafting one: don't post an
+unapproved draft.
 
-After posting, reply with the issue link. The rest of the contribution workflow
-(branch, PR, CI, squash merge) is in `documentation/CONTRIBUTION_WORKFLOW.md`.
+Once the user approves:
+
+- **If you can create issues in `HHS/simpler-grants-pdf-builder`** (through a
+  GitHub integration or an authenticated `gh`), create it with the approved
+  title, body and labels, then reply with the issue link. Try to create it
+  rather than guessing at access in advance. If creation fails because of
+  permissions, authentication or a missing tool, say so and hand over instead.
+- **Otherwise, hand over** so the user can create it in a few clicks:
+  1. A pre-filled link:
+     `https://github.com/HHS/simpler-grants-pdf-builder/issues/new?template=<template file>&title=<title>&labels=<labels>&body=<body>`,
+     with each value URL-encoded. GitHub applies `labels` only for people who can
+     triage the repository; anyone else adds them after creating the issue. If the
+     link would be longer than about 8,000 characters, leave out `body`.
+  2. The title in one code block and the body in another, as raw Markdown, so
+     each copies with one click. Fence the body with four backticks if it
+     contains a code block.
+  3. The labels to apply, as a list.
+
+The rest of the contribution workflow (branch, PR, CI, squash merge) is in
+`documentation/CONTRIBUTION_WORKFLOW.md`.

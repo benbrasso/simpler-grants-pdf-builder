@@ -13,6 +13,9 @@ exact names, including capitalization and emoji. Do not create a new label or a 
 the user explicitly requests it. Preserve unrelated labels when updating an existing issue.
 See [issue labels](documentation/CONTRIBUTION_WORKFLOW.md#issue-labels) for the current conventions.
 
+To draft an issue, follow [`.claude/skills/issue-create/SKILL.md`](.claude/skills/issue-create/SKILL.md)
+(Claude Code loads it as the `/issue-create` skill).
+
 ## PR titles must follow Conventional Commits
 
 Every PR title must start with a type prefix — `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`,

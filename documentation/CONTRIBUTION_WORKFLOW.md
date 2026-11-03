@@ -20,6 +20,8 @@ this contribution workflow.
 flowchart TD
     A([Idea, bug, or request]) --> B[Pick an issue template:<br/>bug report or feature request]
     B --> C[Create the GitHub issue]
+    B -.->|AI agents| SK["/issue-create skill<br/>drafts from the template,<br/>labels and triage guide"]
+    SK -.-> C
     C --> D[Branch off main<br/>handle/short-description]
     D --> E[Read the docs for what you're touching]
 
@@ -60,7 +62,7 @@ flowchart TD
 
 | Step | Read this |
 | --- | --- |
-| Create the issue | [Bug report](../.github/ISSUE_TEMPLATE/bug_report.md) and [feature request](../.github/ISSUE_TEMPLATE/feature_request.md) templates (GitHub offers them when you click **New issue**) |
+| Create the issue | [Bug report](../.github/ISSUE_TEMPLATE/bug_report.md) and [feature request](../.github/ISSUE_TEMPLATE/feature_request.md) templates (GitHub offers them when you click **New issue**). Agents using Claude Code can run the [`/issue-create` skill](../.claude/skills/issue-create/SKILL.md), which drafts an issue from these templates, the [issue labels](#issue-labels) and [quality review and triage](QUALITY_REVIEW_AND_TRIAGE.md#review-finding) |
 | Branch off `main` | [`DEPLOYMENT.md` § 1. Create a feature branch](../DEPLOYMENT.md#1-create-a-feature-branch) and [§ Branch Protection Rules](../DEPLOYMENT.md#branch-protection-rules) |
 | Changing import behavior | [`IMPORT_RULES.md`](IMPORT_RULES.md), [`DOCUMENT_PROCESSING.md`](DOCUMENT_PROCESSING.md) for the shared processing boundary, and [`DEPLOYMENT.md` § Updating Import Rules](../DEPLOYMENT.md#updating-import-rules) |
 | Changing user-facing import errors | [`IMPORT_ERROR_CODES.md`](IMPORT_ERROR_CODES.md), and the "Copy rules" at the top of [`nofos/bloom_nofos/import_errors.py`](../nofos/bloom_nofos/import_errors.py) |
@@ -122,6 +124,9 @@ merge. The differences:
 
 - Read [`AGENTS.md`](../AGENTS.md) first (Claude Code loads it through
   [`CLAUDE.md`](../CLAUDE.md)), then this page.
+- To draft an issue, use the [`/issue-create` skill](../.claude/skills/issue-create/SKILL.md)
+  in Claude Code. Other agents can follow its steps directly. Show the draft
+  to a person and post it only when they ask.
 - Never push to `main` or force-push a shared branch. Work on a branch and
   open a PR.
 - Don't merge a PR unless a person has told you to.

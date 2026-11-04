@@ -115,9 +115,29 @@ jobs:
       - name: Load cached Docker image
         run: docker load < /tmp/docker-image.tar
 
+      # Install Trivy straight from the GitHub release (with checksum check) instead of
+      # letting trivy-action run its install script, which downloads the tarball from
+      # get.trivy.dev and fails the whole job whenever that host is unreachable.
+      - name: Install Trivy from GitHub release
+        env:
+          TRIVY_VERSION: 0.76.1
+        run: |
+          set -euo pipefail
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -O "${base}/${tarball}"
+          curl -fsSL --retry 3 -O "${base}/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep " ${tarball}\$" "trivy_${TRIVY_VERSION}_checksums.txt" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/trivy-bin"
+          tar -xzf "${tarball}" -C "$RUNNER_TEMP/trivy-bin" trivy
+          echo "$RUNNER_TEMP/trivy-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/trivy-bin/trivy" --version
+
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
+          skip-setup-trivy: true
           scan-type: image
           image-ref: nofos:latest
           format: table

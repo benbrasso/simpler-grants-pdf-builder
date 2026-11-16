@@ -120,6 +120,11 @@
               Latest updates
             </a>
           </li>
+          <li class="mobile-lg:grid-col-4 desktop:grid-col-auto usa-footer__primary-content">
+            <a class="usa-footer__primary-link usa-link--external" href="https://www.hhs.gov/accessibility/hhs-digital-accessibility-statement/index.html" target="_blank" rel="noreferrer">
+              Accessibility statement
+            </a>
+          </li>
           {% if user.is_authenticated %}
             <li class="mobile-lg:grid-col-4 desktop:grid-col-auto usa-footer__primary-content">
               {% include "includes/feedback_link.html" with html_class="usa-footer__primary-link usa-link--external" link_text="Submit a support ticket" only %}
